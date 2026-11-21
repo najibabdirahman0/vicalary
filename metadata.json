@@ -1,0 +1,6 @@
+{
+  "name": "VICALARY — Body & Soul",
+  "description": "Six everyday wellness companions built for real routines — Meal Camera, Barcode Scanner, Smart Cookbook, Food Budget, Health Coach, and Faith & Calm.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

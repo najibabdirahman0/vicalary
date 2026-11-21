@@ -1,0 +1,190 @@
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import Lenis from 'lenis';
+import { ensureGsapRegistered } from './utils/gsapSetup';
+import { Preloader } from './components/Preloader';
+import { RoutePath, SiteMenu } from './components/SiteMenu';
+import { HeroSection } from './components/HeroSection';
+import { WaveBand } from './components/WaveBand';
+import { TapeSlider } from './components/TapeSlider';
+import { GiantPinning } from './components/GiantPinning';
+import { MakeItStick } from './components/MakeItStick';
+import { SiteFooter } from './components/SiteFooter';
+import {
+  AboutPage,
+  ContactPage,
+  FaqPage,
+  NewsPage,
+  ProductDetailPage,
+  ProductsPage,
+} from './components/SubPages';
+
+export default function App() {
+  const [route, setRoute] = useState<RoutePath>('/');
+  const [preloaderDone, setPreloaderDone] = useState(false);
+  const [heroRevealed, setHeroRevealed] = useState(false);
+  const lenisRef = useRef<Lenis | null>(null);
+
+  // Sync Lenis smooth scroll with GSAP ScrollTrigger
+  useEffect(() => {
+    const { gsap, ScrollTrigger } = ensureGsapRegistered();
+    const lenis = new Lenis({
+      duration: 1.15,
+      easing: (t) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
+      smoothWheel: true,
+    });
+    lenisRef.current = lenis;
+
+    if (!preloaderDone) {
+      lenis.stop();
+    }
+
+    const onScrollUpdate = () => ScrollTrigger.update();
+    lenis.on('scroll', onScrollUpdate);
+
+    const tick = (time: number) => {
+      lenis.raf(time * 1000);
+    };
+    gsap.ticker.add(tick);
+    gsap.ticker.lagSmoothing(0);
+
+    // Refresh Lenis & all ScrollTriggers on viewport width/orientation changes & webfont load
+    let lastWidth = window.innerWidth;
+    let resizeTimer = 0;
+    const scheduleRefresh = (force = false) => {
+      window.clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => {
+        const nextWidth = window.innerWidth;
+        if (force || nextWidth !== lastWidth) {
+          lastWidth = nextWidth;
+          lenis.resize();
+          ScrollTrigger.refresh(true);
+        }
+      }, 140);
+    };
+
+    const handleResize = () => scheduleRefresh(false);
+    const handleOrientation = () => scheduleRefresh(true);
+
+    window.addEventListener('resize', handleResize);
+    window.addEventListener('orientationchange', handleOrientation);
+
+    if (document.fonts?.ready) {
+      document.fonts.ready.then(() => {
+        lenis.resize();
+        ScrollTrigger.refresh();
+      });
+    }
+
+    return () => {
+      window.clearTimeout(resizeTimer);
+      window.removeEventListener('resize', handleResize);
+      window.removeEventListener('orientationchange', handleOrientation);
+      lenis.off('scroll', onScrollUpdate);
+      gsap.ticker.remove(tick);
+      lenis.destroy();
+      lenisRef.current = null;
+    };
+  }, []);
+
+  // Start Lenis & refresh ScrollTrigger once preloader finishes
+  useEffect(() => {
+    const { ScrollTrigger } = ensureGsapRegistered();
+    if (preloaderDone) {
+      lenisRef.current?.start();
+      lenisRef.current?.resize();
+      ScrollTrigger.refresh(true);
+    } else {
+      lenisRef.current?.stop();
+    }
+  }, [preloaderDone]);
+
+  // Refresh ScrollTrigger whenever route changes
+  useEffect(() => {
+    const { ScrollTrigger } = ensureGsapRegistered();
+    const id = window.requestAnimationFrame(() => {
+      lenisRef.current?.resize();
+      ScrollTrigger.refresh(true);
+    });
+    return () => window.cancelAnimationFrame(id);
+  }, [route]);
+
+  const navigate = useCallback((nextPath: RoutePath) => {
+    setRoute(nextPath);
+    if (lenisRef.current) {
+      lenisRef.current.scrollTo(0, { immediate: true });
+    } else {
+      window.scrollTo({ top: 0 });
+    }
+  }, []);
+
+  const handleRevealStart = useCallback(() => {
+    setHeroRevealed(true);
+  }, []);
+
+  const handlePreloaderDone = useCallback(() => {
+    setHeroRevealed(true);
+    setPreloaderDone(true);
+  }, []);
+
+  const renderMainContent = () => {
+    if (route === '/products') {
+      return <ProductsPage onNavigate={navigate} />;
+    }
+    if (route.startsWith('/products/')) {
+      const id = route.replace('/products/', '');
+      return <ProductDetailPage tapeId={id} onNavigate={navigate} />;
+    }
+    if (route === '/about') {
+      return <AboutPage onNavigate={navigate} />;
+    }
+    if (route === '/news') {
+      return <NewsPage />;
+    }
+    if (route === '/contact') {
+      return <ContactPage />;
+    }
+    if (route === '/faq') {
+      return <FaqPage />;
+    }
+
+    return (
+      <>
+        <HeroSection revealed={heroRevealed} />
+        <WaveBand />
+        <TapeSlider onNavigate={navigate} />
+        <GiantPinning />
+        <MakeItStick onNavigate={navigate} />
+      </>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-[#FDFCFB] text-[#0D2F4F]">
+      <a
+        href="#main"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-[#A6EB67] focus:px-4 focus:py-2 focus:text-sm focus:font-bold focus:text-[#0D2F4F]"
+      >
+        Skip to content
+      </a>
+
+      {!preloaderDone && (
+        <Preloader
+          onRevealStart={handleRevealStart}
+          onDone={handlePreloaderDone}
+        />
+      )}
+
+      <SiteMenu
+        currentPath={route}
+        onNavigate={navigate}
+        revealed={heroRevealed}
+      />
+
+      <main id="main" tabIndex={-1}>
+        {renderMainContent()}
+      </main>
+
+      <SiteFooter onNavigate={navigate} />
+    </div>
+  );
+}
