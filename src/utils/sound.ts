@@ -10,6 +10,13 @@ class VicalarySoundEngine {
   private stepIdx = 0;
   private unlockBound = false;
 
+  // Single-voice continuous close-mic dry peel foley (zero echo, zero overlapping buffers)
+  private peelBuffer: AudioBuffer | null = null;
+  private peelSource: AudioBufferSourceNode | null = null;
+  private peelGain: GainNode | null = null;
+  private peelPeakFilter: BiquadFilterNode | null = null;
+  private peelIdleTimer: number | null = null;
+
   constructor() {
     this.bindGestureUnlock();
   }
@@ -55,6 +62,7 @@ class VicalarySoundEngine {
       this.startSoothingTune();
     } else {
       this.stopSoothingTune();
+      this.stopScrollPeel();
     }
   }
 
@@ -212,79 +220,188 @@ class VicalarySoundEngine {
     }
   }
 
-  private renderPeelSound(ctx: AudioContext, duration = 0.28, volume = 0.24, pitchShift = 1) {
-    const now = ctx.currentTime;
-    const sampleCount = Math.floor(ctx.sampleRate * duration);
-    const buffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate);
-    const data = buffer.getChannelData(0);
-
-    // Textured adhesive-peel grain: modulated pink-ish noise with subtle micro-rip crackles
-    let lastOut = 0;
-    for (let i = 0; i < sampleCount; i++) {
-      const white = Math.random() * 2 - 1;
-      lastOut = (lastOut + 0.08 * white) / 1.08;
-      const crackle = Math.random() > 0.94 ? (Math.random() * 2 - 1) * 0.95 : 0;
-      const env = Math.sin((i / sampleCount) * Math.PI);
-      data[i] = (lastOut * 1.9 + white * 0.45 + crackle * 0.6) * env;
+  /**
+   * Builds a 2.4-second seamless, close-mic dry stick-slip adhesive peel texture buffer.
+   * Zero reverb or echo—pure micro-filament separation transients.
+   */
+  private getOrCreatePeelBuffer(ctx: AudioContext): AudioBuffer {
+    if (this.peelBuffer && this.peelBuffer.sampleRate === ctx.sampleRate) {
+      return this.peelBuffer;
     }
 
-    const noise = ctx.createBufferSource();
-    noise.buffer = buffer;
+    const duration = 2.4;
+    const sr = ctx.sampleRate;
+    const sampleCount = Math.floor(sr * duration);
+    const buffer = ctx.createBuffer(1, sampleCount, sr);
+    const data = buffer.getChannelData(0);
 
-    // Bandpass sweep mimics adhesive lifting off paper ("shhkkrtt-zip")
-    const band = ctx.createBiquadFilter();
-    band.type = 'bandpass';
-    band.Q.value = 1.9;
-    band.frequency.setValueAtTime(950 * pitchShift, now);
-    band.frequency.exponentialRampToValueAtTime(2600 * pitchShift, now + duration * 0.65);
-    band.frequency.exponentialRampToValueAtTime(1450 * pitchShift, now + duration);
+    let nextSnap = Math.floor(sr * 0.004);
+    let snapAmp = 0;
+    let snapDecay = 0.96;
+    let prevWhite = 0;
+    let bodyState = 0;
 
-    const highpass = ctx.createBiquadFilter();
-    highpass.type = 'highpass';
-    highpass.frequency.setValueAtTime(420, now);
+    for (let i = 0; i < sampleCount; i++) {
+      if (i >= nextSnap) {
+        // Tight organic spacing (3.5ms - 13.5ms) mimicking real vinyl/paper adhesive separation
+        const gapMs = 3.5 + Math.random() * 10.0;
+        nextSnap = i + Math.max(48, Math.floor((gapMs / 1000) * sr));
+        snapAmp = 0.38 + Math.random() * 0.62;
+        // Dry 0.7ms - 1.9ms micro-snap decay (tight, zero ring/echo)
+        const decayMs = 0.7 + Math.random() * 1.2;
+        snapDecay = Math.exp(-1 / ((decayMs / 1000) * sr));
+      }
+
+      snapAmp *= snapDecay;
+
+      const white = Math.random() * 2 - 1;
+      const highCrisp = white - prevWhite * 0.65;
+      prevWhite = white;
+
+      bodyState = bodyState * 0.68 + white * 0.32;
+
+      const dryBed = highCrisp * 0.16 + bodyState * 0.08;
+      const snap = highCrisp * snapAmp * 1.25 + bodyState * snapAmp * 0.32;
+      data[i] = dryBed + snap;
+    }
+
+    // 25ms seamless equal-power crossfade at loop edges so looping never clicks
+    const fadeSamples = Math.min(Math.floor(sr * 0.025), Math.floor(sampleCount / 4));
+    for (let i = 0; i < fadeSamples; i++) {
+      const t = i / fadeSamples;
+      data[i] *= t;
+      data[sampleCount - 1 - i] *= t;
+    }
+
+    this.peelBuffer = buffer;
+    return buffer;
+  }
+
+  private ensurePeelVoice(ctx: AudioContext) {
+    if (this.peelSource && this.peelGain && this.peelPeakFilter) {
+      return;
+    }
+
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = this.getOrCreatePeelBuffer(ctx);
+    src.loop = true;
+
+    // Strip low rumble so the sound stays dry and close-mic
+    const hp = ctx.createBiquadFilter();
+    hp.type = 'highpass';
+    hp.frequency.setValueAtTime(780, now);
+    hp.Q.value = 0.7;
+
+    // Tight adhesive separation presence
+    const peak = ctx.createBiquadFilter();
+    peak.type = 'peaking';
+    peak.frequency.setValueAtTime(2700, now);
+    peak.Q.value = 1.6;
+    peak.gain.setValueAtTime(6.5, now);
+
+    // Dry paper upper crispness without harshness
+    const lp = ctx.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.setValueAtTime(8200, now);
+    lp.Q.value = 0.6;
 
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(volume, now + 0.025);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
 
-    noise.connect(band);
-    band.connect(highpass);
-    highpass.connect(gain);
+    src.connect(hp);
+    hp.connect(peak);
+    peak.connect(lp);
+    lp.connect(gain);
     gain.connect(ctx.destination);
+    src.start(now);
 
-    noise.start(now);
-    noise.stop(now + duration + 0.02);
+    this.peelSource = src;
+    this.peelPeakFilter = peak;
+    this.peelGain = gain;
   }
 
   /**
-   * Audible scroll-triggered sticker peel sound for "Start Your Journey" sticker.
-   * Plays whenever audio is permitted (even before enabling background soundtrack),
-   * unless the user explicitly muted sound.
+   * Drives the single-voice dry sticker peel foley directly from scroll velocity.
+   * Only audible while actively scrolling across the sticker; stops cleanly within ~30ms
+   * when scrolling stops—no echo, no double triggers, no button-click peel bleed.
    */
-  public playScrollStickerPeel(progress = 0.5) {
-    if (this.explicitlyMuted) return;
+  public updateScrollPeel(
+    active: boolean,
+    velocityPxPerSec: number,
+    progress = 0.5,
+    peelingOff = true
+  ) {
+    if (this.peelIdleTimer !== null) {
+      window.clearTimeout(this.peelIdleTimer);
+      this.peelIdleTimer = null;
+    }
+
+    if (!active || this.explicitlyMuted || velocityPxPerSec < 55) {
+      this.fadeOutPeelVoice();
+      return;
+    }
+
     const ctx = this.ensureContext();
     if (!ctx) return;
 
-    const pitchShift = 0.9 + Math.min(1, Math.max(0, progress)) * 0.28;
-    const trigger = () => this.renderPeelSound(ctx, 0.3, 0.26, pitchShift);
+    this.ensurePeelVoice(ctx);
+    if (!this.peelGain || !this.peelSource || !this.peelPeakFilter) return;
 
-    if (ctx.state === 'suspended') {
-      ctx
-        .resume()
-        .then(trigger)
-        .catch(() => {});
-    } else {
-      trigger();
-    }
+    const now = ctx.currentTime;
+    const normSpeed = Math.min(1, Math.max(0.08, (velocityPxPerSec - 55) / 1450));
+    const targetGain = 0.09 + normSpeed * 0.25;
+    const targetRate = 0.62 + normSpeed * 0.72;
+    const targetFreq = peelingOff
+      ? 2200 + Math.min(1, Math.max(0, progress)) * 1850
+      : 3200 - (1 - Math.min(1, Math.max(0, progress))) * 1050;
+
+    this.peelSource.playbackRate.setTargetAtTime(targetRate, now, 0.025);
+    this.peelPeakFilter.frequency.setTargetAtTime(targetFreq, now, 0.03);
+    this.peelGain.gain.setTargetAtTime(targetGain, now, 0.014);
+
+    // Silence dryly right away if user pauses scrolling
+    this.peelIdleTimer = window.setTimeout(() => {
+      this.peelIdleTimer = null;
+      this.fadeOutPeelVoice();
+    }, 55);
   }
 
+  private fadeOutPeelVoice() {
+    if (!this.ctx || !this.peelGain) return;
+    const now = this.ctx.currentTime;
+    this.peelGain.gain.setTargetAtTime(0.0001, now, 0.012);
+  }
+
+  public stopScrollPeel() {
+    if (this.peelIdleTimer !== null) {
+      window.clearTimeout(this.peelIdleTimer);
+      this.peelIdleTimer = null;
+    }
+    this.fadeOutPeelVoice();
+  }
+
+  // Soft tactile chime cue for UI clicks (when background sound is enabled)
   public playTapePeel() {
     if (!this.enabled) return;
     const ctx = this.ensureContext();
     if (!ctx) return;
-    this.renderPeelSound(ctx, 0.24, 0.16, 1.05);
+
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(440, now);
+    osc.frequency.exponentialRampToValueAtTime(587.33, now + 0.12);
+
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(0.075, now + 0.018);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.18);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(now);
+    osc.stop(now + 0.19);
   }
 
   public playRollClick() {

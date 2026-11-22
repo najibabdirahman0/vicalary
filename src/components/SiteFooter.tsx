@@ -62,8 +62,8 @@ const DISCS: DiscSpec[] = [
     kind: 'social',
     key: 'soc-x',
     social: 'x',
-    label: 'X',
-    externalUrl: 'https://x.com',
+    label: 'X (@wearevicalary)',
+    externalUrl: 'https://x.com/wearevicalary?s=11',
     initXFrac: 0.41,
     initRot: -10,
   },
@@ -89,8 +89,8 @@ const DISCS: DiscSpec[] = [
     kind: 'social',
     key: 'soc-wa',
     social: 'whatsapp',
-    label: 'WhatsApp',
-    externalUrl: 'https://wa.me',
+    label: 'WhatsApp (+62 822 26369835)',
+    externalUrl: 'https://wa.me/6282226369835',
     initXFrac: 0.78,
     initRot: -14,
   },
@@ -582,7 +582,7 @@ export function SiteFooter({ onNavigate }: SiteFooterProps) {
       e.currentTarget.releasePointerCapture(e.pointerId);
     }
 
-    const wasTap = drag.moved < 8;
+    const wasTap = drag.moved < 10;
     dragRef.current = null;
     suppressClickIdxRef.current = wasTap ? null : idx;
 

@@ -273,12 +273,11 @@ export function MakeItStick({ onNavigate }: MakeItStickProps) {
         typeof window !== 'undefined' &&
         window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
-      // Ismail-style CC Page Turn Sticker Peel (Top-to-Bottom Sweep -> 3D Lift-Off + Audible Peel SFX)
+      // Ismail-style CC Page Turn Sticker Peel (Top-to-Bottom Sweep -> 3D Lift-Off + Dry Scroll-Only Peel SFX)
       if (!prefersReduced && stickerWrapperRef.current) {
         let lastScroll = typeof window !== 'undefined' ? window.scrollY : 0;
+        let lastTime = performance.now();
         let hasUserScrolled = false;
-        let lastSoundTime = 0;
-        let lastSoundProgress = -1;
 
         ScrollTrigger.create({
           trigger: stickerWrapperRef.current,
@@ -288,17 +287,25 @@ export function MakeItStick({ onNavigate }: MakeItStickProps) {
           invalidateOnRefresh: true,
           onRefresh: (self) => {
             lastScroll = self.scroll();
+            lastTime = performance.now();
+            vicalarySound.stopScrollPeel();
           },
           onUpdate: (self) => {
+            const now = performance.now();
             const scroll = self.scroll();
-            if (Math.abs(scroll - lastScroll) >= 2) {
+            const rawDelta = Math.abs(scroll - lastScroll);
+            const dtSec = Math.max(0.008, (now - lastTime) / 1000);
+            const velocityPxPerSec = rawDelta / dtSec;
+
+            if (rawDelta >= 1.5) {
               hasUserScrolled = true;
-              lastScroll = scroll;
             }
+            lastScroll = scroll;
+            lastTime = now;
 
             const p = self.progress;
             if (p <= 0.08) {
-              lastSoundProgress = -1;
+              vicalarySound.stopScrollPeel();
               updateStickerPeel(0);
               if (stickerSvgRef.current) {
                 stickerSvgRef.current.style.transform =
@@ -315,17 +322,10 @@ export function MakeItStick({ onNavigate }: MakeItStickProps) {
               }
 
               if (hasUserScrolled) {
-                const now = performance.now();
-                const movedEnough =
-                  lastSoundProgress < 0 || Math.abs(p - lastSoundProgress) >= 0.14;
-                if (movedEnough && now - lastSoundTime >= 360) {
-                  lastSoundTime = now;
-                  lastSoundProgress = p;
-                  vicalarySound.playScrollStickerPeel(peelT);
-                }
+                vicalarySound.updateScrollPeel(true, velocityPxPerSec, peelT, self.direction >= 0);
               }
             } else {
-              lastSoundProgress = -1;
+              vicalarySound.stopScrollPeel();
               updateStickerPeel(1);
               if (stickerSvgRef.current) {
                 const liftP = (p - 0.74) / 0.26;
@@ -342,8 +342,11 @@ export function MakeItStick({ onNavigate }: MakeItStickProps) {
               }
             }
           },
+          onLeave: () => {
+            vicalarySound.stopScrollPeel();
+          },
           onLeaveBack: () => {
-            lastSoundProgress = -1;
+            vicalarySound.stopScrollPeel();
             updateStickerPeel(0);
             if (stickerSvgRef.current) {
               stickerSvgRef.current.style.transform =
@@ -394,7 +397,10 @@ export function MakeItStick({ onNavigate }: MakeItStickProps) {
       );
     }, sectionRef);
 
-    return () => ctx.revert();
+    return () => {
+      vicalarySound.stopScrollPeel();
+      ctx.revert();
+    };
   }, [updateStickerPeel]);
 
   return (

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, ArrowUpRight, CheckCircle2, Mail, MapPin, Phone } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, CheckCircle2, Mail, MapPin, MessageCircle, Phone } from 'lucide-react';
 import { IMAGES, NEWS_ITEMS, TAPES, TapeId } from '../data/tapes';
 import { TapeRollGraphic, TapeStripPeel } from './TapeVisuals';
 import { RoutePath } from './SiteMenu';
@@ -293,17 +293,69 @@ export function NewsPage() {
   );
 }
 
+const PLATFORM_EMAIL = 'vicalaryii@gmail.com';
+const PLATFORM_X_URL = 'https://x.com/wearevicalary?s=11';
+const PLATFORM_WHATSAPP_URL = 'https://wa.me/6282226369835';
+const PLATFORM_WHATSAPP_DISPLAY = '+62 822 26369835';
+
 export function ContactPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [message, setMessage] = useState('');
+  const [sending, setSending] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const mailtoHref = `mailto:${PLATFORM_EMAIL}?subject=${encodeURIComponent(
+    `VICALARY Message from ${name.trim() || 'Visitor'}`
+  )}&body=${encodeURIComponent(
+    `Name: ${name}\nEmail: ${email}\n\n${message}`
+  )}`;
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim() || !email.trim() || !message.trim()) return;
-    vicalarySound.playTapePeel();
-    setSubmitted(true);
+    if (!name.trim() || !email.trim() || !message.trim() || sending) return;
+
+    setSending(true);
+    setErrorMsg(null);
+
+    try {
+      const response = await fetch('/api/contact', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Accept: 'application/json',
+        },
+        body: JSON.stringify({
+          name: name.trim(),
+          email: email.trim(),
+          message: message.trim(),
+        }),
+      });
+
+      const data = (await response.json().catch(() => ({}))) as {
+        ok?: boolean;
+        error?: string;
+      };
+
+      if (!response.ok || !data.ok) {
+        throw new Error(
+          data.error ||
+            `Could not deliver to ${PLATFORM_EMAIL} right now. Use the button below to open your email app.`
+        );
+      }
+
+      vicalarySound.playTapePeel();
+      setSubmitted(true);
+    } catch (err) {
+      const detail =
+        err instanceof Error && err.message
+          ? err.message
+          : `Could not reach ${PLATFORM_EMAIL} right now. Use the button below to send directly from your email app.`;
+      setErrorMsg(detail);
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -320,19 +372,47 @@ export function ContactPage() {
           <div className="lg:col-span-5 space-y-6">
             <p className="text-base text-[#0D2F4F]/80 leading-relaxed">
               Nutrition partnerships, halal database suggestions, or questions about your VICALARY
-              daily wellness routine? Drop us a note.
+              daily wellness routine? Drop us a note—messages go straight to our platform inbox.
             </p>
             <div className="space-y-4 text-sm font-medium text-[#0D2F4F]">
               <div className="flex items-center gap-3">
-                <MapPin className="w-5 h-5 text-[#0B3C7C]" />
+                <MapPin className="w-5 h-5 text-[#0B3C7C] shrink-0" />
                 <span>VICALARY Wellness Platform</span>
               </div>
+              <a
+                href={`mailto:${PLATFORM_EMAIL}`}
+                className="flex items-center gap-3 hover:text-[#0B3C7C] transition-colors group"
+              >
+                <Mail className="w-5 h-5 text-[#0B3C7C] shrink-0" />
+                <span className="underline decoration-[#0D2F4F]/30 underline-offset-4 group-hover:decoration-[#0B3C7C]">
+                  {PLATFORM_EMAIL}
+                </span>
+              </a>
+              <a
+                href={PLATFORM_WHATSAPP_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 hover:text-[#0B3C7C] transition-colors group"
+              >
+                <MessageCircle className="w-5 h-5 text-[#0B3C7C] shrink-0" />
+                <span className="underline decoration-[#0D2F4F]/30 underline-offset-4 group-hover:decoration-[#0B3C7C]">
+                  WhatsApp: {PLATFORM_WHATSAPP_DISPLAY}
+                </span>
+                <ArrowUpRight className="w-4 h-4 opacity-60 group-hover:opacity-100" />
+              </a>
+              <a
+                href={PLATFORM_X_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-3 hover:text-[#0B3C7C] transition-colors group"
+              >
+                <ArrowUpRight className="w-5 h-5 text-[#0B3C7C] shrink-0" />
+                <span className="underline decoration-[#0D2F4F]/30 underline-offset-4 group-hover:decoration-[#0B3C7C]">
+                  X: @wearevicalary
+                </span>
+              </a>
               <div className="flex items-center gap-3">
-                <Mail className="w-5 h-5 text-[#0B3C7C]" />
-                <span>hello@vicalary.com</span>
-              </div>
-              <div className="flex items-center gap-3">
-                <Phone className="w-5 h-5 text-[#0B3C7C]" />
+                <Phone className="w-5 h-5 text-[#0B3C7C] shrink-0" />
                 <span>21+ Languages Supported Worldwide</span>
               </div>
             </div>
@@ -343,24 +423,34 @@ export function ContactPage() {
               <div className="rounded-2xl bg-[#D9F7C4] p-8 sm:p-10 text-[#0D2F4F] border-2 border-[#0D2F4F]">
                 <CheckCircle2 className="w-10 h-10 mb-4" />
                 <h2 className="font-display text-4xl font-black uppercase mb-2">
-                  NOTE RECEIVED!
+                  MESSAGE SENT!
                 </h2>
                 <p className="text-base font-medium mb-6">
-                  Thanks, {name}. Our team at VICALARY has received your message and will reply to{' '}
-                  <strong>{email}</strong> shortly.
+                  Thanks, {name}. Your message has been sent directly to{' '}
+                  <strong>{PLATFORM_EMAIL}</strong>. We&apos;ll reply to <strong>{email}</strong>{' '}
+                  shortly.
                 </p>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSubmitted(false);
-                    setName('');
-                    setEmail('');
-                    setMessage('');
-                  }}
-                  className="rounded-full bg-[#0D2F4F] px-6 py-2.5 text-xs font-black tracking-wider text-[#D9F7C4] cursor-pointer"
-                >
-                  SEND ANOTHER NOTE
-                </button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSubmitted(false);
+                      setName('');
+                      setEmail('');
+                      setMessage('');
+                    }}
+                    className="rounded-full bg-[#0D2F4F] px-6 py-2.5 text-xs font-black tracking-wider text-[#D9F7C4] cursor-pointer"
+                  >
+                    SEND ANOTHER NOTE
+                  </button>
+                  <a
+                    href={mailtoHref}
+                    className="inline-flex items-center gap-1.5 rounded-full border-2 border-[#0D2F4F] px-5 py-2 text-xs font-black tracking-wider text-[#0D2F4F] hover:bg-[#0D2F4F] hover:text-[#D9F7C4] transition-colors"
+                  >
+                    <span>OPEN EMAIL APP</span>
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </a>
+                </div>
               </div>
             ) : (
               <form
@@ -409,11 +499,26 @@ export function ContactPage() {
                     className="w-full rounded-xl border border-[#0D2F4F]/20 bg-[#F3F7F3] px-4 py-3 text-sm text-[#0D2F4F] focus:border-[#0D2F4F] focus:outline-none"
                   />
                 </div>
+
+                {errorMsg && (
+                  <div className="rounded-xl bg-[#FFD6DF]/60 border border-[#9D174D]/30 p-4 text-xs font-medium text-[#0D2F4F] space-y-2.5">
+                    <p>{errorMsg}</p>
+                    <a
+                      href={mailtoHref}
+                      className="inline-flex items-center gap-1.5 rounded-full bg-[#0D2F4F] px-4 py-2 text-[11px] font-black tracking-wider text-[#D9F7C4]"
+                    >
+                      <span>SEND TO {PLATFORM_EMAIL}</span>
+                      <ArrowUpRight className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                )}
+
                 <button
                   type="submit"
-                  className="inline-flex items-center gap-2 rounded-full bg-[#0D2F4F] px-7 py-3.5 text-xs font-black tracking-[0.14em] text-[#D9F7C4] hover:bg-[#0B3C7C] transition-colors cursor-pointer"
+                  disabled={sending}
+                  className="inline-flex items-center gap-2 rounded-full bg-[#0D2F4F] px-7 py-3.5 text-xs font-black tracking-[0.14em] text-[#D9F7C4] hover:bg-[#0B3C7C] transition-colors cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                 >
-                  <span>SEND MESSAGE</span>
+                  <span>{sending ? 'SENDING...' : 'SEND MESSAGE'}</span>
                   <ArrowUpRight className="w-4 h-4" />
                 </button>
               </form>
@@ -435,10 +540,10 @@ export function LaunchPage({
 }: SubPageProps & { store?: 'play' | 'apple' }) {
   const storeName =
     store === 'play'
-      ? 'Google Play'
+      ? 'Google Play Store'
       : store === 'apple'
         ? 'Apple App Store'
-        : 'iOS & Android';
+        : 'Google Play Store & App Store';
 
   return (
     <section
@@ -447,7 +552,7 @@ export function LaunchPage({
     >
       <div className="mx-auto max-w-4xl text-center flex flex-col items-center">
         <span className="inline-flex items-center gap-2 rounded-full bg-[#0D2F4F] px-4 py-1.5 text-[11px] sm:text-xs font-black tracking-[0.18em] text-[#A6EB67] uppercase mb-6 shadow-md">
-          <span>{storeName}</span>
+          <span>VICALARY</span>
           <span aria-hidden="true">·</span>
           <span>COMING SOON</span>
         </span>
@@ -456,13 +561,13 @@ export function LaunchPage({
           className="font-display font-black uppercase text-[#0D2F4F] leading-[0.86] tracking-[-0.02em]"
           style={{ fontSize: 'clamp(2.6rem, 7.5vw, 5.75rem)' }}
         >
-          THANK YOU FOR STAYING FOR THIS PLATFORM&apos;S LAUNCH.
+          VICALARY IS COMING SOON ON {storeName.toUpperCase()}.
         </h1>
 
         <p className="mt-6 sm:mt-8 text-base sm:text-xl font-medium text-[#0D2F4F]/80 max-w-2xl leading-relaxed">
-          VICALARY for {storeName} is completing final nutrition accuracy, barcode truth, and
-          calm daily-routine tuning. We appreciate you being here early for a companion built for
-          both body and soul.
+          Thank you for staying tuned—our mobile companion for photo nutrition, barcode truth,
+          30-day food budgeting, and calm daily routines is launching soon on the{' '}
+          {store === 'apple' ? 'Apple App Store and Google Play Store' : 'Google Play Store'}.
         </p>
 
         <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
