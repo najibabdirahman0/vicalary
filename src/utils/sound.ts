@@ -3,10 +3,34 @@
 class VicalarySoundEngine {
   private ctx: AudioContext | null = null;
   private enabled = false;
+  private explicitlyMuted = false;
   private masterGain: GainNode | null = null;
   private padOscs: OscillatorNode[] = [];
   private chimeTimer: number | null = null;
   private stepIdx = 0;
+  private unlockBound = false;
+
+  constructor() {
+    this.bindGestureUnlock();
+  }
+
+  private bindGestureUnlock() {
+    if (typeof window === 'undefined' || this.unlockBound) return;
+    this.unlockBound = true;
+
+    const unlock = () => {
+      const ctx = this.ensureContext();
+      if (ctx && ctx.state === 'running') {
+        window.removeEventListener('pointerdown', unlock);
+        window.removeEventListener('touchstart', unlock);
+        window.removeEventListener('keydown', unlock);
+      }
+    };
+
+    window.addEventListener('pointerdown', unlock, { passive: true });
+    window.addEventListener('touchstart', unlock, { passive: true });
+    window.addEventListener('keydown', unlock, { passive: true });
+  }
 
   private ensureContext(): AudioContext | null {
     if (typeof window === 'undefined') return null;
@@ -26,6 +50,7 @@ class VicalarySoundEngine {
 
   public setEnabled(next: boolean) {
     this.enabled = next;
+    this.explicitlyMuted = !next;
     if (next) {
       this.startSoothingTune();
     } else {
@@ -187,26 +212,79 @@ class VicalarySoundEngine {
     }
   }
 
+  private renderPeelSound(ctx: AudioContext, duration = 0.28, volume = 0.24, pitchShift = 1) {
+    const now = ctx.currentTime;
+    const sampleCount = Math.floor(ctx.sampleRate * duration);
+    const buffer = ctx.createBuffer(1, sampleCount, ctx.sampleRate);
+    const data = buffer.getChannelData(0);
+
+    // Textured adhesive-peel grain: modulated pink-ish noise with subtle micro-rip crackles
+    let lastOut = 0;
+    for (let i = 0; i < sampleCount; i++) {
+      const white = Math.random() * 2 - 1;
+      lastOut = (lastOut + 0.08 * white) / 1.08;
+      const crackle = Math.random() > 0.94 ? (Math.random() * 2 - 1) * 0.95 : 0;
+      const env = Math.sin((i / sampleCount) * Math.PI);
+      data[i] = (lastOut * 1.9 + white * 0.45 + crackle * 0.6) * env;
+    }
+
+    const noise = ctx.createBufferSource();
+    noise.buffer = buffer;
+
+    // Bandpass sweep mimics adhesive lifting off paper ("shhkkrtt-zip")
+    const band = ctx.createBiquadFilter();
+    band.type = 'bandpass';
+    band.Q.value = 1.9;
+    band.frequency.setValueAtTime(950 * pitchShift, now);
+    band.frequency.exponentialRampToValueAtTime(2600 * pitchShift, now + duration * 0.65);
+    band.frequency.exponentialRampToValueAtTime(1450 * pitchShift, now + duration);
+
+    const highpass = ctx.createBiquadFilter();
+    highpass.type = 'highpass';
+    highpass.frequency.setValueAtTime(420, now);
+
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, now);
+    gain.gain.linearRampToValueAtTime(volume, now + 0.025);
+    gain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+
+    noise.connect(band);
+    band.connect(highpass);
+    highpass.connect(gain);
+    gain.connect(ctx.destination);
+
+    noise.start(now);
+    noise.stop(now + duration + 0.02);
+  }
+
+  /**
+   * Audible scroll-triggered sticker peel sound for "Start Your Journey" sticker.
+   * Plays whenever audio is permitted (even before enabling background soundtrack),
+   * unless the user explicitly muted sound.
+   */
+  public playScrollStickerPeel(progress = 0.5) {
+    if (this.explicitlyMuted) return;
+    const ctx = this.ensureContext();
+    if (!ctx) return;
+
+    const pitchShift = 0.9 + Math.min(1, Math.max(0, progress)) * 0.28;
+    const trigger = () => this.renderPeelSound(ctx, 0.3, 0.26, pitchShift);
+
+    if (ctx.state === 'suspended') {
+      ctx
+        .resume()
+        .then(trigger)
+        .catch(() => {});
+    } else {
+      trigger();
+    }
+  }
+
   public playTapePeel() {
     if (!this.enabled) return;
     const ctx = this.ensureContext();
     if (!ctx) return;
-
-    const now = ctx.currentTime;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(440, now);
-    osc.frequency.exponentialRampToValueAtTime(587.33, now + 0.14);
-
-    gain.gain.setValueAtTime(0.0001, now);
-    gain.gain.linearRampToValueAtTime(0.08, now + 0.02);
-    gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start(now);
-    osc.stop(now + 0.23);
+    this.renderPeelSound(ctx, 0.24, 0.16, 1.05);
   }
 
   public playRollClick() {

@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { ensureGsapRegistered } from '../utils/gsapSetup';
 import { FooterStickerDisc, VicalaryMark } from './TapeVisuals';
 import { SplitChars } from './MotionPrimitives';
@@ -204,28 +204,6 @@ export function SiteFooter({ onNavigate }: SiteFooterProps) {
   const inViewRef = useRef(false);
   const dropTriggeredRef = useRef(false);
   const suppressClickIdxRef = useRef<number | null>(null);
-  const [comingSoonStore, setComingSoonStore] = useState<'play' | 'apple' | null>(null);
-  const comingSoonTimerRef = useRef<number | null>(null);
-
-  useEffect(() => {
-    return () => {
-      if (comingSoonTimerRef.current !== null) {
-        window.clearTimeout(comingSoonTimerRef.current);
-      }
-    };
-  }, []);
-
-  const handleStoreClick = (store: 'play' | 'apple') => {
-    vicalarySound.playRollClick();
-    if (comingSoonTimerRef.current !== null) {
-      window.clearTimeout(comingSoonTimerRef.current);
-    }
-    setComingSoonStore(store);
-    comingSoonTimerRef.current = window.setTimeout(() => {
-      setComingSoonStore(null);
-      comingSoonTimerRef.current = null;
-    }, 2600);
-  };
 
   // 1. GSAP ScrollTrigger Reveals for Navigation, Crest & Headline
   useLayoutEffect(() => {
@@ -671,76 +649,32 @@ export function SiteFooter({ onNavigate }: SiteFooterProps) {
         ref={stageRef}
         className="footer-bottom relative w-full h-[460px] sm:h-[540px] md:h-[560px] lg:h-[46vw] lg:min-h-[580px] lg:max-h-[720px] pt-2 pb-14 sm:pb-16 flex flex-col items-center text-center overflow-hidden select-none"
       >
-        {/* Left: Google Play Store Badge */}
+        {/* Left: Standalone Google Play Store Icon */}
         <button
           type="button"
-          onClick={() => handleStoreClick('play')}
-          aria-live="polite"
-          aria-label={comingSoonStore === 'play' ? 'Google Play — Coming Soon' : 'Google Play Store — Coming Soon'}
-          className={`footer-store-badge absolute left-3 sm:left-10 top-2.5 sm:top-6 z-30 inline-flex items-center gap-2 sm:gap-2.5 rounded-xl border-2 px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-left shadow-lg transition-all duration-300 cursor-pointer hover:-translate-y-0.5 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A6EB67] ${
-            comingSoonStore === 'play'
-              ? 'border-[#A6EB67] bg-[#A6EB67] text-[#081F36]'
-              : 'border-[#A6EB67]/40 bg-[#081F36]/90 text-[#D9F7C4] hover:border-[#A6EB67] hover:bg-[#081F36]'
-          }`}
+          onClick={() => {
+            vicalarySound.playTapePeel();
+            onNavigate('/launch/play');
+          }}
+          aria-label="Google Play Store — Launch updates"
+          title="Google Play Store"
+          className="footer-store-icon absolute left-4 sm:left-10 top-3 sm:top-6 z-30 inline-flex items-center justify-center p-1.5 text-[#A6EB67] hover:text-[#D9F7C4] transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#A6EB67] rounded-lg"
         >
-          <GooglePlayIconSvg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-          <span className="grid items-center">
-            <span
-              className={`col-start-1 row-start-1 flex flex-col leading-none transition-all duration-200 ${
-                comingSoonStore === 'play' ? 'opacity-0 -translate-y-1' : 'opacity-100 translate-y-0'
-              }`}
-            >
-              <span className="hidden sm:block text-[9px] font-bold uppercase tracking-[0.14em] text-[#A6EB67]/85">
-                Get it on
-              </span>
-              <span className="text-[11px] sm:text-xs font-extrabold tracking-tight whitespace-nowrap">
-                Google Play
-              </span>
-            </span>
-            <span
-              className={`col-start-1 row-start-1 text-[11px] sm:text-xs font-black uppercase tracking-[0.06em] whitespace-nowrap transition-all duration-200 ${
-                comingSoonStore === 'play' ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1 pointer-events-none'
-              }`}
-            >
-              Coming Soon
-            </span>
-          </span>
+          <GooglePlayIconSvg className="w-7 h-7 sm:w-9 sm:h-9 md:w-10 md:h-10 drop-shadow-md" />
         </button>
 
-        {/* Right: Apple App Store Badge */}
+        {/* Right: Standalone Apple App Store Icon */}
         <button
           type="button"
-          onClick={() => handleStoreClick('apple')}
-          aria-live="polite"
-          aria-label={comingSoonStore === 'apple' ? 'Apple App Store — Coming Soon' : 'Apple App Store — Coming Soon'}
-          className={`footer-store-badge absolute right-3 sm:right-10 top-2.5 sm:top-6 z-30 inline-flex items-center gap-2 sm:gap-2.5 rounded-xl border-2 px-2.5 py-1.5 sm:px-3.5 sm:py-2 text-left shadow-lg transition-all duration-300 cursor-pointer hover:-translate-y-0.5 active:scale-95 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#A6EB67] ${
-            comingSoonStore === 'apple'
-              ? 'border-[#A6EB67] bg-[#A6EB67] text-[#081F36]'
-              : 'border-[#A6EB67]/40 bg-[#081F36]/90 text-[#D9F7C4] hover:border-[#A6EB67] hover:bg-[#081F36]'
-          }`}
+          onClick={() => {
+            vicalarySound.playTapePeel();
+            onNavigate('/launch/apple');
+          }}
+          aria-label="Apple App Store — Launch updates"
+          title="Apple App Store"
+          className="footer-store-icon absolute right-4 sm:right-10 top-3 sm:top-6 z-30 inline-flex items-center justify-center p-1.5 text-[#A6EB67] hover:text-[#D9F7C4] transition-all duration-200 hover:scale-110 active:scale-95 cursor-pointer focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#A6EB67] rounded-lg"
         >
-          <AppleIconSvg className="w-4 h-4 sm:w-5 sm:h-5 shrink-0" />
-          <span className="grid items-center">
-            <span
-              className={`col-start-1 row-start-1 flex flex-col leading-none transition-all duration-200 ${
-                comingSoonStore === 'apple' ? 'opacity-0 -translate-y-1' : 'opacity-100 translate-y-0'
-              }`}
-            >
-              <span className="hidden sm:block text-[9px] font-bold uppercase tracking-[0.14em] text-[#A6EB67]/85">
-                Download on
-              </span>
-              <span className="text-[11px] sm:text-xs font-extrabold tracking-tight whitespace-nowrap">
-                App Store
-              </span>
-            </span>
-            <span
-              className={`col-start-1 row-start-1 text-[11px] sm:text-xs font-black uppercase tracking-[0.06em] whitespace-nowrap transition-all duration-200 ${
-                comingSoonStore === 'apple' ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-1 pointer-events-none'
-              }`}
-            >
-              Coming Soon
-            </span>
-          </span>
+          <AppleIconSvg className="w-7 h-7 sm:w-9 sm:h-9 md:w-10 md:h-10 drop-shadow-md" />
         </button>
 
         {/* Centered VICALARY Crest sitting cleanly above headline */}

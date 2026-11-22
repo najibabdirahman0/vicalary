@@ -2,6 +2,11 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import Lenis from 'lenis';
 import { ensureGsapRegistered } from './utils/gsapSetup';
 import { Preloader } from './components/Preloader';
+import {
+  ROUTE_TRANSITION_COLORS,
+  RouteTransition,
+  RouteTransitionConfig,
+} from './components/RouteTransition';
 import { RoutePath, SiteMenu } from './components/SiteMenu';
 import { HeroSection } from './components/HeroSection';
 import { WaveBand } from './components/WaveBand';
@@ -13,15 +18,39 @@ import {
   AboutPage,
   ContactPage,
   FaqPage,
+  LaunchPage,
   NewsPage,
   ProductDetailPage,
   ProductsPage,
 } from './components/SubPages';
+import { TAPES } from './data/tapes';
+
+function getRouteLabel(path: RoutePath): string {
+  if (path === '/') return 'HOME';
+  if (path === '/about') return 'ABOUT';
+  if (path === '/products') return 'OUR MODULES';
+  if (path === '/news') return 'UPDATES';
+  if (path === '/contact') return 'CONTACT';
+  if (path === '/faq') return 'FAQ';
+  if (path === '/launch/play') return 'GOOGLE PLAY';
+  if (path === '/launch/apple') return 'APP STORE';
+  if (path === '/launch') return 'COMING SOON';
+  if (path.startsWith('/products/')) {
+    const id = path.replace('/products/', '');
+    const found = TAPES.find((t) => t.id === id);
+    return found ? found.name.toUpperCase() : 'MODULE';
+  }
+  return 'VICALARY';
+}
 
 export default function App() {
   const [route, setRoute] = useState<RoutePath>('/');
   const [preloaderDone, setPreloaderDone] = useState(false);
   const [heroRevealed, setHeroRevealed] = useState(false);
+  const [activeTransition, setActiveTransition] = useState<RouteTransitionConfig | null>(null);
+  const pendingPathRef = useRef<RoutePath | null>(null);
+  const colorCursorRef = useRef(0);
+  const transitionSeqRef = useRef(0);
   const lenisRef = useRef<Lenis | null>(null);
 
   // Sync Lenis smooth scroll with GSAP ScrollTrigger
@@ -108,13 +137,48 @@ export default function App() {
     return () => window.cancelAnimationFrame(id);
   }, [route]);
 
-  const navigate = useCallback((nextPath: RoutePath) => {
-    setRoute(nextPath);
+  const scrollToTopImmediate = useCallback(() => {
     if (lenisRef.current) {
       lenisRef.current.scrollTo(0, { immediate: true });
     } else {
       window.scrollTo({ top: 0 });
     }
+  }, []);
+
+  // Color-cycling curved arc-cut transition on every section/page navigation
+  const navigate = useCallback(
+    (nextPath: RoutePath) => {
+      if (nextPath === route && !pendingPathRef.current) {
+        scrollToTopImmediate();
+        return;
+      }
+      if (activeTransition) return;
+
+      const paletteEntry =
+        ROUTE_TRANSITION_COLORS[colorCursorRef.current % ROUTE_TRANSITION_COLORS.length];
+      colorCursorRef.current += 1;
+      transitionSeqRef.current += 1;
+      pendingPathRef.current = nextPath;
+
+      setActiveTransition({
+        id: transitionSeqRef.current,
+        ...paletteEntry,
+        label: getRouteLabel(nextPath),
+      });
+    },
+    [activeTransition, route, scrollToTopImmediate]
+  );
+
+  const handleTransitionCovered = useCallback(() => {
+    if (pendingPathRef.current) {
+      setRoute(pendingPathRef.current);
+      pendingPathRef.current = null;
+    }
+    scrollToTopImmediate();
+  }, [scrollToTopImmediate]);
+
+  const handleTransitionDone = useCallback(() => {
+    setActiveTransition(null);
   }, []);
 
   const handleRevealStart = useCallback(() => {
@@ -146,6 +210,15 @@ export default function App() {
     if (route === '/faq') {
       return <FaqPage />;
     }
+    if (route === '/launch/play') {
+      return <LaunchPage store="play" onNavigate={navigate} />;
+    }
+    if (route === '/launch/apple') {
+      return <LaunchPage store="apple" onNavigate={navigate} />;
+    }
+    if (route === '/launch') {
+      return <LaunchPage onNavigate={navigate} />;
+    }
 
     return (
       <>
@@ -171,6 +244,14 @@ export default function App() {
         <Preloader
           onRevealStart={handleRevealStart}
           onDone={handlePreloaderDone}
+        />
+      )}
+
+      {activeTransition && (
+        <RouteTransition
+          config={activeTransition}
+          onCovered={handleTransitionCovered}
+          onDone={handleTransitionDone}
         />
       )}
 

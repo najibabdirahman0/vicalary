@@ -11,6 +11,9 @@ export type RoutePath =
   | '/news'
   | '/contact'
   | '/faq'
+  | '/launch'
+  | '/launch/play'
+  | '/launch/apple'
   | `/products/${string}`;
 
 interface SiteMenuProps {

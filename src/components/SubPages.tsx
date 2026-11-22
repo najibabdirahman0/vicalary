@@ -428,3 +428,68 @@ export function ContactPage() {
 export function FaqPage() {
   return <FaqSection />;
 }
+
+export function LaunchPage({
+  store,
+  onNavigate,
+}: SubPageProps & { store?: 'play' | 'apple' }) {
+  const storeName =
+    store === 'play'
+      ? 'Google Play'
+      : store === 'apple'
+        ? 'Apple App Store'
+        : 'iOS & Android';
+
+  return (
+    <section
+      style={{ paddingBottom: 'calc(var(--curve-depth) + 5rem)' }}
+      className="bg-[#FDFCFB] paper-grain pt-28 sm:pt-36 px-6 sm:px-10 text-[#0D2F4F]"
+    >
+      <div className="mx-auto max-w-4xl text-center flex flex-col items-center">
+        <span className="inline-flex items-center gap-2 rounded-full bg-[#0D2F4F] px-4 py-1.5 text-[11px] sm:text-xs font-black tracking-[0.18em] text-[#A6EB67] uppercase mb-6 shadow-md">
+          <span>{storeName}</span>
+          <span aria-hidden="true">·</span>
+          <span>COMING SOON</span>
+        </span>
+
+        <h1
+          className="font-display font-black uppercase text-[#0D2F4F] leading-[0.86] tracking-[-0.02em]"
+          style={{ fontSize: 'clamp(2.6rem, 7.5vw, 5.75rem)' }}
+        >
+          THANK YOU FOR STAYING FOR THIS PLATFORM&apos;S LAUNCH.
+        </h1>
+
+        <p className="mt-6 sm:mt-8 text-base sm:text-xl font-medium text-[#0D2F4F]/80 max-w-2xl leading-relaxed">
+          VICALARY for {storeName} is completing final nutrition accuracy, barcode truth, and
+          calm daily-routine tuning. We appreciate you being here early for a companion built for
+          both body and soul.
+        </p>
+
+        <div className="mt-10 flex flex-wrap items-center justify-center gap-4">
+          <button
+            type="button"
+            onClick={() => {
+              vicalarySound.playTapePeel();
+              onNavigate('/');
+            }}
+            className="inline-flex items-center gap-2.5 rounded-full bg-[#0D2F4F] px-7 py-3.5 text-sm font-black tracking-[0.12em] text-[#D9F7C4] shadow-lg transition-transform duration-200 hover:scale-105 cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            <span>BACK TO HOME</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              vicalarySound.playRollClick();
+              onNavigate('/products');
+            }}
+            className="inline-flex items-center gap-2 rounded-full bg-[#A6EB67] border-2 border-[#0D2F4F] px-7 py-3.5 text-sm font-black tracking-[0.12em] text-[#0D2F4F] transition-transform duration-200 hover:scale-105 cursor-pointer"
+          >
+            <span>EXPLORE MODULES</span>
+            <ArrowUpRight className="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </section>
+  );
+}
