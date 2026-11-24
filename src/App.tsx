@@ -222,7 +222,7 @@ export default function App() {
 
     return (
       <>
-        <HeroSection revealed={heroRevealed} />
+        <HeroSection revealed={heroRevealed} onNavigate={navigate} />
         <WaveBand />
         <TapeSlider onNavigate={navigate} />
         <GiantPinning />

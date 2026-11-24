@@ -1,11 +1,14 @@
-import React, { useLayoutEffect, useRef } from 'react';
+import React, { useCallback, useLayoutEffect, useRef } from 'react';
 import { IMAGES } from '../data/tapes';
 import { ensureGsapRegistered } from '../utils/gsapSetup';
 import { VicalaryMark } from './TapeVisuals';
 import { ScrollPeelTape, SplitChars } from './MotionPrimitives';
+import { HeroPhone3D } from './HeroPhone3D';
+import { RoutePath } from './SiteMenu';
 
 interface HeroSectionProps {
   revealed?: boolean;
+  onNavigate?: (path: RoutePath) => void;
 }
 
 const CARDBOARD_WORDS = [
@@ -26,10 +29,18 @@ const CARDBOARD_WORDS = [
   'WAY.',
 ];
 
-export function HeroSection({ revealed = true }: HeroSectionProps) {
+export function HeroSection({ revealed = true, onNavigate }: HeroSectionProps) {
   const sectionRef = useRef<HTMLElement>(null);
+  const pinStageRef = useRef<HTMLDivElement>(null);
   const topRef = useRef<HTMLDivElement>(null);
+  const heroTapeRef = useRef<HTMLDivElement>(null);
   const collageRef = useRef<HTMLDivElement>(null);
+  const phoneProgressRef = useRef(0);
+  const renderTriggerRef = useRef<(() => void) | null>(null);
+
+  const registerRenderTrigger = useCallback((fn: (() => void) | null) => {
+    renderTriggerRef.current = fn;
+  }, []);
 
   // 1. Hero Entrance Timeline (runs in sync when Preloader finishes peeling)
   useLayoutEffect(() => {
@@ -93,12 +104,45 @@ export function HeroSection({ revealed = true }: HeroSectionProps) {
     return () => ctx.revert();
   }, [revealed]);
 
-  // 2. Bottom Collage ScrollTrigger (Responsive Parallax + Cardboard Split Chars + Handwritten Ink Rules)
+  // 2. Bottom Collage ScrollTrigger + Pinned Unhurried Hero 3D iPhone Rotation
   useLayoutEffect(() => {
     const { gsap } = ensureGsapRegistered();
     const mm = gsap.matchMedia();
 
     const ctx = gsap.context(() => {
+      // Bidirectional SweeTape Hero 3D iPhone Flip (Pinned Unhurried Stage: Landing <-> Dashboard)
+      if (pinStageRef.current && heroTapeRef.current) {
+        const syncFlipProgress = (progress: number) => {
+          const flipP = Math.max(0, Math.min(1, progress));
+          phoneProgressRef.current = flipP;
+          renderTriggerRef.current?.();
+        };
+
+        gsap.fromTo(
+          heroTapeRef.current,
+          { y: 0, scale: 1 },
+          {
+            y: () => (window.innerWidth >= 1024 ? 10 : window.innerWidth >= 640 ? 8 : 6),
+            scale: () => (window.innerWidth >= 1024 ? 1.03 : 1.015),
+            ease: 'sine.inOut',
+            scrollTrigger: {
+              trigger: pinStageRef.current,
+              start: 'top top',
+              end: () =>
+                `+=${window.innerWidth >= 1024 ? 1900 : window.innerWidth >= 640 ? 1550 : 1350}`,
+              pin: true,
+              pinSpacing: true,
+              anticipatePin: 1,
+              refreshPriority: 1,
+              scrub: 1.4,
+              invalidateOnRefresh: true,
+              onUpdate: (self) => syncFlipProgress(self.progress),
+              onRefresh: (self) => syncFlipProgress(self.progress),
+            },
+          }
+        );
+      }
+
       if (!collageRef.current) return;
 
       // Desktop 12-col parallel parallax vs Mobile/Tablet stacked per-card parallax
@@ -228,7 +272,7 @@ export function HeroSection({ revealed = true }: HeroSectionProps) {
           },
         });
       });
-    }, collageRef);
+    }, sectionRef);
 
     return () => {
       mm.revert();
@@ -237,14 +281,16 @@ export function HeroSection({ revealed = true }: HeroSectionProps) {
   }, []);
 
   return (
-    <section ref={sectionRef} className="hero-section relative overflow-hidden">
-      {/* TOP VICALARY DEEP NAVY HERO CANVAS */}
-      <div
-        ref={topRef}
-        className="hero-top relative bg-[#0D2F4F] text-[#FDFCFB] pt-20 pb-24 sm:pt-24 sm:pb-32 md:pb-36 px-5 sm:px-10"
-      >
-        {/* Corner perforated stamp (desktop/tablet top-left) */}
-        <div className="corner-mark hidden md:flex flex-col items-start absolute top-8 left-8 lg:left-12 bg-[#D9F7C4] text-[#0D2F4F] px-4 py-2.5 rounded-sm shadow-md border border-[#0D2F4F]/20">
+    <section ref={sectionRef} className="hero-section relative bg-[#FDFCFB] paper-grain overflow-x-clip">
+      {/* PINNED TOP HERO + CURVED SEAM + 3D IPHONE STAGE */}
+      <div ref={pinStageRef} className="hero-pin-stage relative z-20 overflow-visible">
+        {/* TOP VICALARY DEEP NAVY HERO CANVAS */}
+        <div
+          ref={topRef}
+          className="hero-top relative z-10 bg-[#0D2F4F] text-[#FDFCFB] pt-6 pb-8 sm:pt-7 sm:pb-10 md:pt-8 md:pb-10 px-5 sm:px-10"
+        >
+        {/* Corner perforated stamp (desktop/tablet top-left, restoring SweeTape hierarchy) */}
+        <div className="corner-mark hidden md:flex flex-col items-start absolute top-7 left-7 lg:left-11 bg-[#D9F7C4] text-[#0D2F4F] px-4 py-2 rounded-sm shadow-md border border-[#0D2F4F]/20 z-20">
           <span className="text-[11px] font-black tracking-[0.14em] leading-tight">
             <SplitChars text="BUILT WITH CARE FOR" engine="gsap" />
           </span>
@@ -253,54 +299,86 @@ export function HeroSection({ revealed = true }: HeroSectionProps) {
           </span>
         </div>
 
-        <div className="mx-auto max-w-6xl flex flex-col items-center text-center">
+        <div className="mx-auto max-w-6xl flex flex-col items-center text-center relative z-20">
           {/* Eyebrow split around Vicalary Mark */}
-          <div className="flex items-center justify-center gap-2.5 sm:gap-5 mb-4 sm:mb-6">
-            <span className="font-display text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-[0.06em] text-[#FDFCFB]">
+          <div className="flex items-center justify-center gap-2.5 sm:gap-4 mb-1.5 sm:mb-2">
+            <span className="font-display text-xl sm:text-3xl md:text-4xl font-extrabold tracking-[0.06em] text-[#FDFCFB]">
               <SplitChars text="WE'RE" engine="gsap" />
             </span>
             <div className="hero-mark-slot">
               <div className="hero-mark-inner">
-                <VicalaryMark className="w-11 h-11 sm:w-14 sm:h-14 md:w-16 md:h-16 drop-shadow-md" />
+                <VicalaryMark className="w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14 drop-shadow-md" />
               </div>
             </div>
-            <span className="font-display text-2xl sm:text-3xl md:text-4xl font-extrabold tracking-[0.06em] text-[#FDFCFB]">
+            <span className="font-display text-xl sm:text-3xl md:text-4xl font-extrabold tracking-[0.06em] text-[#FDFCFB]">
               <SplitChars text="HERE FOR" engine="gsap" />
             </span>
           </div>
 
-          {/* Massive warped display headline: BODY & SOUL */}
+          {/* Centered Massive Display Headline: BODY & SOUL (guaranteed zero phone overlap) */}
           <h1
             aria-label="BODY & SOUL"
-            className="font-display font-black uppercase text-[#A6EB67] leading-[0.82] tracking-[-0.02em] select-none flex flex-col items-center"
-            style={{ fontSize: 'clamp(4rem, 18.5vw, 17rem)' }}
+            className="font-display font-black uppercase text-[#A6EB67] leading-[0.83] tracking-[-0.02em] select-none flex flex-col items-center relative z-30"
+            style={{ fontSize: 'clamp(3.0rem, 8.0vw, 6.8rem)' }}
           >
             <SplitChars text="BODY" engine="gsap" />
             <SplitChars text="& SOUL" engine="gsap" />
           </h1>
 
           {/* Mobile animated perforated stamp */}
-          <div className="corner-mark mt-6 md:hidden inline-flex flex-col items-center bg-[#D9F7C4] text-[#0D2F4F] px-3.5 py-2 rounded-sm shadow-md border border-[#0D2F4F]/20">
+          <div className="corner-mark mt-3 md:hidden inline-flex flex-col items-center bg-[#D9F7C4] text-[#0D2F4F] px-3.5 py-1.5 rounded-sm shadow-md border border-[#0D2F4F]/20">
             <span className="text-[10px] font-black tracking-[0.14em] leading-tight uppercase">
               BUILT WITH CARE FOR EVERYDAY WELLNESS
             </span>
+          </div>
+
+          {/* Grounded Seam Stage: Soft Navy-Rose Halo + Floating 3D iPhone 18 Pro Max + Cast Shadow */}
+          <div className="relative flex flex-col items-center mt-5 sm:mt-6 -mb-52 sm:-mb-56 md:-mb-60 lg:-mb-64 z-30">
+            {/* Subtle ambient studio aura blending the phone with the #0D2F4F navy + #A6EB67 backdrop */}
+            <div
+              className="pointer-events-none absolute -inset-x-16 top-6 bottom-12 rounded-full opacity-90"
+              style={{
+                background:
+                  'radial-gradient(ellipse at 50% 45%, rgba(166,235,103,0.16) 0%, rgba(124,58,71,0.18) 42%, rgba(13,47,79,0) 74%)',
+              }}
+              aria-hidden="true"
+            />
+
+            <div
+              ref={heroTapeRef}
+              className="hero-tape pointer-events-auto relative w-[300px] h-[450px] sm:w-[340px] sm:h-[495px] md:w-[365px] md:h-[510px] lg:w-[385px] lg:h-[520px] will-change-transform"
+            >
+              <HeroPhone3D
+                progressRef={phoneProgressRef}
+                registerRenderTrigger={registerRenderTrigger}
+                onNavigate={onNavigate}
+                className="w-full h-full"
+              />
+            </div>
+
+            {/* Grounded elliptical surface shadow anchoring the iPhone onto the #FDFCFB curved paper deck */}
+            <div
+              className="pointer-events-none -mt-3 w-48 sm:w-56 h-6 rounded-[100%] bg-[#0D2F4F]/25 blur-lg"
+              aria-hidden="true"
+            />
           </div>
         </div>
 
         {/* Curved paper arc-foot transition */}
         <div
-          className="arc-foot absolute bottom-0 left-0 right-0 h-12 sm:h-16 md:h-20 bg-[#FDFCFB]"
+          className="arc-foot absolute bottom-0 left-0 right-0 h-14 sm:h-18 md:h-24 bg-[#FDFCFB]"
           style={{
             clipPath: 'ellipse(62% 100% at 50% 100%)',
           }}
           aria-hidden="true"
         />
+        </div>
       </div>
 
       {/* BOTTOM TACTILE COLLAGE PART */}
       <div
         ref={collageRef}
-        className="bottom-part relative bg-[#FDFCFB] paper-grain pt-10 pb-20 sm:pt-16 sm:pb-28 lg:pb-32 px-5 sm:px-10"
+        className="bottom-part relative bg-[#FDFCFB] paper-grain pt-56 pb-20 sm:pt-60 sm:pb-28 lg:pt-68 lg:pb-32 px-5 sm:px-10"
       >
         <div className="mx-auto max-w-6xl relative">
           <div className="grid grid-cols-1 md:grid-cols-12 gap-8 lg:gap-8 items-center">
